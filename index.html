@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Drone Map</title>
+    <title>Drone Map Calendar</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
     <style>
         #map { height: 500px; }
@@ -15,51 +15,112 @@
     <div id="map"></div>
 
     <div id="controls">
+        <label>Select Date: <input type="date" id="mapDate"></label>
+        <button onclick="loadMarkersForDate()">Load Markers</button>
+
+        <br><br>
         <label>Latitude: <input type="number" id="lat" step="any"></label>
         <label>Longitude: <input type="number" id="lng" step="any"></label>
         <button onclick="addMarker()">Add Marker</button>
-        <button onclick="addMarkersFromArray()">Load Markers</button>
+
+        <br><br>
+        <label>Enter multiple coordinates (lat,lng per line):</label><br>
+        <textarea id="multiCoords" rows="4" cols="40" placeholder="e.g.\n40.7128,-74.0060\n34.0522,-118.2437"></textarea>
+        <br>
+        <button onclick="addMultipleMarkers()">Add Multiple Markers</button>
+
+        <br><br>
+        <button onclick="saveMarkers()">Save Markers for Date</button>
+        <button onclick="clearMap()">Clear Map</button>
     </div>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
-        // Initialize map
         var map = L.map('map').setView([37.7749, -122.4194], 5); // Default center (San Francisco)
 
         // Add OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        // Sample array of coordinates (latitude, longitude)
-        let coordinates = [
-            [40.7128, -74.0060], // New York
-            [34.0522, -118.2437], // Los Angeles
-            [41.8781, -87.6298],  // Chicago
-            [29.7604, -95.3698]   // Houston
-        ];
+        let markers = [];  // Holds active markers on the map
+        let savedMaps = JSON.parse(localStorage.getItem('savedMaps')) || {}; // Load saved maps
 
         function addMarker() {
             let lat = parseFloat(document.getElementById('lat').value);
             let lng = parseFloat(document.getElementById('lng').value);
-
             if (!isNaN(lat) && !isNaN(lng)) {
-                L.marker([lat, lng]).addTo(map)
-                    .bindPopup(`Marker at (${lat}, ${lng})`).openPopup();
-                map.setView([lat, lng], 8); // Adjust view to the new marker
+                let marker = L.marker([lat, lng]).addTo(map)
+                    .bindPopup(`Marker at (${lat}, ${lng})`);
+                markers.push(marker);
             } else {
-                alert("Please enter valid latitude and longitude values.");
+                alert("Enter valid latitude and longitude.");
             }
         }
 
-        function addMarkersFromArray() {
-            let bounds = L.latLngBounds(); // Create bounds to adjust map view
+        function addMultipleMarkers() {
+            let inputText = document.getElementById('multiCoords').value.trim();
+            let lines = inputText.split("\n");
+            let bounds = L.latLngBounds();
 
-            coordinates.forEach(coord => {
-                let marker = L.marker(coord).addTo(map)
-                    .bindPopup(`Marker at (${coord[0]}, ${coord[1]})`);
-                bounds.extend(coord); // Extend bounds to include each marker
+            lines.forEach(line => {
+                let parts = line.split(",");
+                if (parts.length === 2) {
+                    let lat = parseFloat(parts[0].trim());
+                    let lng = parseFloat(parts[1].trim());
+                    if (!isNaN(lat) && !isNaN(lng)) {
+                        let marker = L.marker([lat, lng]).addTo(map)
+                            .bindPopup(`Marker at (${lat}, ${lng})`);
+                        markers.push(marker);
+                        bounds.extend([lat, lng]);
+                    }
+                }
             });
 
-            map.fitBounds(bounds); // Adjust map to fit all markers
+            if (markers.length > 0) {
+                map.fitBounds(bounds);
+            } else {
+                alert("No valid coordinates found.");
+            }
+        }
+
+        function saveMarkers() {
+            let selectedDate = document.getElementById('mapDate').value;
+            if (!selectedDate) {
+                alert("Please select a date.");
+                return;
+            }
+
+            let coordinates = markers.map(marker => marker.getLatLng());
+            savedMaps[selectedDate] = coordinates; // Save markers under the selected date
+
+            localStorage.setItem('savedMaps', JSON.stringify(savedMaps));
+            alert(`Markers saved for ${selectedDate}`);
+        }
+
+        function loadMarkersForDate() {
+            let selectedDate = document.getElementById('mapDate').value;
+            if (!selectedDate || !savedMaps[selectedDate]) {
+                alert("No saved markers for this date.");
+                return;
+            }
+
+            clearMap(); // Remove existing markers
+
+            let bounds = L.latLngBounds();
+            savedMaps[selectedDate].forEach(coord => {
+                let marker = L.marker([coord.lat, coord.lng]).addTo(map)
+                    .bindPopup(`Marker at (${coord.lat}, ${coord.lng})`);
+                markers.push(marker);
+                bounds.extend([coord.lat, coord.lng]);
+            });
+
+            if (markers.length > 0) {
+                map.fitBounds(bounds);
+            }
+        }
+
+        function clearMap() {
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
         }
     </script>
 
